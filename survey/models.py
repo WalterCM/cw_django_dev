@@ -5,7 +5,7 @@ from django.urls import reverse
 
 class Question(models.Model):
     created = models.DateField('Creada', auto_now_add=True)
-    author = models.ForeignKey(get_user_model(), related_name="questions", verbose_name='Pregunta',
+    author = models.ForeignKey(get_user_model(), related_name='questions', verbose_name='Pregunta',
                                on_delete=models.CASCADE)
     title = models.CharField('Título', max_length=200)
     description = models.TextField('Descripción')
@@ -23,7 +23,7 @@ class Answer(models.Model):
                       (4, 'Alto'),
                       (5, 'Muy Alto'),)
 
-    question = models.ForeignKey(Question, related_name="answers", verbose_name='Pregunta', on_delete=models.CASCADE)
-    author = models.ForeignKey(get_user_model(), related_name="answers", verbose_name='Autor', on_delete=models.CASCADE)
-    value = models.PositiveIntegerField("Respuesta", default=0)
-    comment = models.TextField("Comentario", default="", blank=True)
+    question = models.ForeignKey(Question, related_name='answers', verbose_name='Pregunta', on_delete=models.CASCADE)
+    author = models.ForeignKey(get_user_model(), related_name='answers', verbose_name='Autor', on_delete=models.CASCADE)
+    value = models.PositiveIntegerField('Respuesta', default=0)
+    comment = models.TextField('Comentario', default='', blank=True)
