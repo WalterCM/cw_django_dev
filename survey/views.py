@@ -36,11 +36,11 @@ def answer_question(request):
     answer.save()
     return JsonResponse({'ok': True})
 
+
 def like_dislike_question(request):
     question_pk = request.POST.get('question_pk')
     if not request.POST.get('question_pk'):
         return JsonResponse({'ok': False})
-    question = Question.objects.filter(pk=question_pk)[0]
+    # question = Question.objects.filter(pk=question_pk)[0]
     # TODO: Dar Like
     return JsonResponse({'ok': True})
-

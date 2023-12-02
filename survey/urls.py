@@ -12,6 +12,4 @@ urlpatterns = [
     path('question/edit/<int:pk>', QuestionUpdateView.as_view(), name='question-edit'),
     path('question/answer', answer_question, name='question-answer'),
     path('question/like', like_dislike_question, name='question-like'),
-
-
 ]

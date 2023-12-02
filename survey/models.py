@@ -11,18 +11,17 @@ class Question(models.Model):
     description = models.TextField('Descripción')
     # TODO: Quisieramos tener un ranking de la pregunta, con likes y dislikes dados por los usuarios.
 
-
     def get_absolute_url(self):
         return reverse('survey:question-edit', args=[self.pk])
 
 
 class Answer(models.Model):
-    ANSWERS_VALUES = ((0,'Sin Responder'),
-                      (1,'Muy Bajo'),
-                      (2,'Bajo'),
-                      (3,'Regular'),
-                      (4,'Alto'),
-                      (5,'Muy Alto'),)
+    ANSWERS_VALUES = ((0, 'Sin Responder'),
+                      (1, 'Muy Bajo'),
+                      (2, 'Bajo'),
+                      (3, 'Regular'),
+                      (4, 'Alto'),
+                      (5, 'Muy Alto'),)
 
     question = models.ForeignKey(Question, related_name="answers", verbose_name='Pregunta', on_delete=models.CASCADE)
     author = models.ForeignKey(get_user_model(), related_name="answers", verbose_name='Autor', on_delete=models.CASCADE)
