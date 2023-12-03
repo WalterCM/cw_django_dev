@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block content %}
+    <{% csrf_token %}
     <h1>Preguntas</h1>
     <div class="d-flex flex-column">
         {% for question in object_list %}
@@ -7,7 +8,7 @@
                 <div class="d-flex flex-row">
                     <div class="col-10">
                         <i class="far fa-question-circle" title="{{ question.description }}"></i>
-                        <span class="fw-bold">{{ question.title }}</span>
+                        <a href="{% url 'survey:question-edit' question.pk %}" class="fw-bold">{{ question.title }}</a>
                     </div>
                     <div class="col-2">
                         <span class="fw-lighter">Autor:</span> {{ question.author }}
@@ -28,16 +29,16 @@
                     <div class="col-4 d-flex flex-column ">
                         <u class="fw-lighter mb-1">Evalúa la pregunta</u>
                         <div>
-                            <a class="mx-1 like {% if question.user_likes %}fas{% else %}fal{% endif %} fa-thumbs-up text-decoration-none"
+                            <a class="mx-1 like {% if question.is_like is True %}fas{% else %}fal{% endif %} fa-thumbs-up text-decoration-none"
                                href="#" data-question="{{ question.pk }}" data-value="like" ></a>
-                            <a class="mx-1 like {% if question.user_dislikes %}fas{% else %}fal{% endif %} fa-thumbs-up fa-flip-both text-decoration-none"
+                            <a class="mx-1 like {% if question.is_like is False %}fas{% else %}fal{% endif %} fa-thumbs-up fa-flip-both text-decoration-none"
                                href="#" data-question="{{ question.pk }}" data-value="dislike"></a>
                         </div>
                     </div>
                     <div class="col-2">
                         <u class="fw-lighter mb-1">Ranking:</u>
                         <div>
-                           {{ question.ranking }} pts.
+                           {{ question.points }} pts.
                         </div>
 
 
@@ -52,8 +53,53 @@
 
 {% block js %}
     <script>
+        $('a.answer').click(function (event) {
+            event.preventDefault();
+            let value = $(this).data('value');
+            let question = $(this).data('question');
+            
+            let csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]').value;
+            
+            $.ajax({
+                url: '{% url "survey:question-answer" %}',
+                method: 'POST',
+                headers: { "X-CSRFToken": csrfToken },
+                data: {
+                    'question_pk': question,
+                    'value': value
+                },
+                success: function(data) {
+                    location.reload();
+                },
+                error: function(xhr, errmsg, err) {
+                    console.log('Error:', errmsg);
+                }
+            });
+        });
 
-
+        $('a.like').click(function (event) {
+            event.preventDefault();
+            let value = $(this).data('value');
+            let question = $(this).data('question');
+            
+            let csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]').value;
+            
+            $.ajax({
+                url: '{% url "survey:question-like" %}',
+                method: 'POST',
+                headers: { "X-CSRFToken": csrfToken },
+                data: {
+                    'question_pk': question,
+                    'value': value
+                },
+                success: function(data) {
+                    location.reload();
+                },
+                error: function(xhr, errmsg, err) {
+                    console.log('Error:', errmsg);
+                }
+            });
+        });
     </script>
 
 {% endblock %}

@@ -151,6 +151,9 @@ class Answer(models.Model):
 
     objects = AnswerManager()
 
+    class Meta:
+        unique_together = ('author', 'question')
+
     def __str__(self):
         return '{question} - {author}:{value}'.format(question=self.question, author=self.author, value=self.value)
 
@@ -158,7 +161,10 @@ class Answer(models.Model):
 class Vote(models.Model):
     question = models.ForeignKey(Question, related_name='votes', verbose_name='Pregunta', on_delete=models.CASCADE)
     author = models.ForeignKey(User, related_name='votes', verbose_name='Autor', on_delete=models.CASCADE)
-    is_like = models.BooleanField(null=False)
+    is_like = models.BooleanField(default=None, null=True)
+
+    class Meta:
+        unique_together = ('author', 'question')
 
     def __str__(self):
         return '{question} - {author}:{like}'.format(

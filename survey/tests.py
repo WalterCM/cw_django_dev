@@ -4,6 +4,7 @@ from django.test import TestCase
 from django.db.utils import IntegrityError
 from django.contrib.auth.models import User
 from django.conf import settings
+from django.urls import reverse
 
 from survey.models import Question, Answer, Vote
 
@@ -105,17 +106,14 @@ class BasicModelTests(TestCase):
         with self.assertRaises(IntegrityError):
             Vote.objects.create(**vote_data)
 
-    def test_vote_no_like_or_dislike(self):
-        """Tests that the function create_vote won't create a vote without indicating like or dislike"""
-        vote_data = self.new_vote_data.copy()
-        del vote_data['is_like']
-        with self.assertRaises(IntegrityError):
-            Vote.objects.create(**vote_data)
-
 
 class RankingModelTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='test_user', password='12345')
+        self.user2 = User.objects.create_user(username='test_user2', password='22345')
+        self.user3 = User.objects.create_user(username='test_user3', password='33345')
+        self.user4 = User.objects.create_user(username='test_user4', password='44445')
+
         self.today_question = Question.objects.create(
             title='Today question',
             author=self.user
@@ -137,22 +135,22 @@ class RankingModelTests(TestCase):
         """Tests that answers increases points by the amount in settings for answers"""
         self.non_today_question.answers.create(author=self.user, value=1)
         self.assertEqual(self.non_today_question.points, self.answer_points)
-        self.non_today_question.answers.create(author=self.user, value=2)
-        self.non_today_question.answers.create(author=self.user, value=3)
+        self.non_today_question.answers.create(author=self.user2, value=2)
+        self.non_today_question.answers.create(author=self.user3, value=3)
         self.assertEqual(self.non_today_question.points, self.answer_points * 3)
 
     def test_points_for_likes(self):
         """Tests that likes increases points by the amount in settings for likes"""
         self.non_today_question.votes.create(author=self.user, is_like=True)
         self.assertEqual(self.non_today_question.points, self.like_points)
-        self.non_today_question.votes.create(author=self.user, is_like=True)
+        self.non_today_question.votes.create(author=self.user2, is_like=True)
         self.assertEqual(self.non_today_question.points, self.like_points * 2)
 
     def test_points_for_dislikes(self):
         """Tests that dislikes increases points by the amount in settings for dislikes"""
         self.non_today_question.votes.create(author=self.user, is_like=False)
         self.assertEqual(self.non_today_question.points, self.dislike_points)
-        self.non_today_question.votes.create(author=self.user, is_like=False)
+        self.non_today_question.votes.create(author=self.user2, is_like=False)
         self.assertEqual(self.non_today_question.points, self.dislike_points * 2)
 
     def test_points_for_today_questions(self):
@@ -164,12 +162,12 @@ class RankingModelTests(TestCase):
     def test_points_mix(self):
         """Tests different combinations of answers, likes, dislikes and the daily bonus"""
         self.non_today_question.votes.create(author=self.user, is_like=True)
-        self.non_today_question.votes.create(author=self.user, is_like=False)
+        self.non_today_question.votes.create(author=self.user2, is_like=False)
         expected_points = self.like_points + self.dislike_points
         self.assertEqual(self.non_today_question.points, expected_points)
 
         self.non_today_question.answers.create(author=self.user, value=3)
-        self.non_today_question.votes.create(author=self.user, is_like=True)
+        self.non_today_question.votes.create(author=self.user3, is_like=True)
         expected_points += self.like_points + self.answer_points
         self.assertEqual(self.non_today_question.points, expected_points)
 
@@ -178,9 +176,9 @@ class RankingModelTests(TestCase):
         expected_points = self.answer_points + self.dislike_points + self.daily_bonus_points
         self.assertEqual(self.today_question.points, expected_points)
 
-        self.today_question.votes.create(author=self.user, is_like=True)
-        self.today_question.votes.create(author=self.user, is_like=True)
-        self.today_question.votes.create(author=self.user, is_like=True)
+        self.today_question.votes.create(author=self.user2, is_like=True)
+        self.today_question.votes.create(author=self.user3, is_like=True)
+        self.today_question.votes.create(author=self.user4, is_like=True)
         expected_points += self.like_points * 3
         self.assertEqual(self.today_question.points, expected_points)
 
@@ -206,3 +204,81 @@ class RankingModelTests(TestCase):
         for question in ranked_questions:
             self.assertLessEqual(question.points, last_question_points)
             last_question_points = question.points
+
+
+class ViewTests(TestCase):
+    def setUp(self):
+        self.user_data = {
+            'username': 'test_user',
+            'password': 'qwerty'
+        }
+        self.user = User.objects.create_user(**self.user_data)
+
+        self.question_data = {
+            'title': 'Test Question',
+            'description': 'This is a test question.',
+        }
+        Question.objects.create_question(author=self.user, **self.question_data)
+
+    def test_question_list_view_no_auth(self):
+        response = self.client.get(reverse('survey:question-list'))
+        self.assertEqual(response.status_code, 200)
+
+    def test_question_list_view(self):
+        self.client.login(**self.user_data)
+        response = self.client.get(reverse('survey:question-list'))
+        self.assertEqual(response.status_code, 200)
+
+    def test_question_create_view_no_auth(self):
+        create_url = reverse('survey:question-create')
+        response = self.client.get(create_url)
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, '/registration/login/?next={}'.format(create_url))
+
+    def test_question_create_view(self):
+        create_url = reverse('survey:question-create')
+        self.client.login(**self.user_data)
+
+        response = self.client.get(create_url)
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(create_url, data=self.question_data)
+        self.assertEqual(response.status_code, 302)
+
+        created_question = Question.objects.first()
+        self.assertEqual(created_question.title, self.question_data.get('title'))
+        self.assertEqual(created_question.description, self.question_data.get('description'))
+
+    def test_question_create_view_no_title(self):
+        create_url = reverse('survey:question-create')
+        self.client.login(**self.user_data)
+
+        response = self.client.get(create_url)
+        self.assertEqual(response.status_code, 200)
+
+        question_data = self.question_data.copy()
+        del question_data['title']
+
+        response = self.client.post(create_url, data=question_data)
+        # it doesn't redirect, just returns with the invalid form errors
+        self.assertEqual(response.status_code, 200)
+
+    def test_question_update_view(self):
+        self.client.login(**self.user_data)
+        question_id = 1
+        response = self.client.get(reverse('survey:question-edit', kwargs={'pk': question_id}))
+        self.assertEqual(response.status_code, 200)
+
+    def test_answer_question_view(self):
+        self.client.login(**self.user_data)
+        question_id = 1
+        data = {'question_pk': question_id, 'value': 5}
+        response = self.client.post(reverse('survey:question-answer'), data=data)
+        self.assertEqual(response.status_code, 200)
+
+    def test_like_dislike_question_view(self):
+        self.client.login(**self.user_data)
+        question_id = 1
+        data = {'question_pk': question_id, 'value': 'like'}
+        response = self.client.post(reverse('survey:question-like'), data=data)
+        self.assertEqual(response.status_code, 200)
