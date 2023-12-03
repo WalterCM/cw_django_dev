@@ -1,14 +1,56 @@
-from django.db import models
+from datetime import datetime
+
+from django.db import models, IntegrityError
+from django.db.models import Sum, Case, When, Value, IntegerField
 from django.urls import reverse
-from django.db import IntegrityError
 from django.contrib.auth import get_user_model
+from django.conf import settings
 
 
 User = get_user_model()
 
 
+class QuestionQuerySet(models.QuerySet):
+    def ranked(self):
+        """
+        Question queryset that orders the questions by points.
+        It uses Sum, Case and When instead of the points property because it was too slow. It was not good when scaled.
+
+        Usage:
+        Questions.objects.ranked()
+        """
+        return self.annotate(
+            total_points=Sum(
+                Case(
+                    When(votes__is_like=True, then=Value(settings.RANKING_CONFIGURATION.get('like_points', 0))),
+                    When(votes__is_like=False, then=Value(settings.RANKING_CONFIGURATION.get('dislike_points', 0))),
+                    default=Value(0),
+                    output_field=IntegerField()
+                )
+            ) +
+            Sum(
+                Case(
+                    When(answers__isnull=False, then=Value(settings.RANKING_CONFIGURATION.get('answer_points', 0))),
+                    default=Value(0),
+                    output_field=IntegerField()
+                )
+            ) +
+            Case(
+                When(
+                    created=datetime.today().date(),
+                    then=Value(settings.RANKING_CONFIGURATION.get('daily_bonus_points', 0))
+                ),
+                default=Value(0),
+                output_field=IntegerField()
+            )
+        ).order_by('-total_points')
+
+
 class QuestionManager(models.Manager):
     def create_question(self, author=None, title=None, **kwargs):
+        """
+        Creates a new question. Checks for integrity of arguments
+        """
         if not author:
             raise IntegrityError('Question requires an author')
         if not title:
@@ -17,6 +59,12 @@ class QuestionManager(models.Manager):
         question.save()
 
         return question
+
+    def get_queryset(self):
+        return QuestionQuerySet(self.model, using=self._db)
+
+    def ranked(self):
+        return self.get_queryset().ranked()
 
 
 class Question(models.Model):
@@ -37,6 +85,40 @@ class Question(models.Model):
 
     def get_absolute_url(self):
         return reverse('survey:question-edit', args=[self.pk])
+
+    @property
+    def is_today(self):
+        return self.created == datetime.today().date()
+
+    @property
+    def points(self):
+        """
+        Returns the amount of points the question has, depending on its answers, likes, dislikes,
+        if it was created today, and ranking configuration in settings.
+
+        Used only for individual objects, not querysets.
+        """
+        answers = self.answers.all().count()
+        likes = self.votes.filter(is_like=True).count()
+        dislikes = self.votes.filter(is_like=False).count()
+
+        answer_points = settings.RANKING_CONFIGURATION.get('answer_points', 0)
+        likes_points = settings.RANKING_CONFIGURATION.get('like_points', 0)
+        dislikes_points = settings.RANKING_CONFIGURATION.get('dislike_points', 0)
+        daily_bonus_points = settings.RANKING_CONFIGURATION.get('daily_bonus_points', 0)
+
+        # Calculate points without daily bonus
+        total_points = (
+            answers * answer_points +
+            likes * likes_points +
+            dislikes * dislikes_points
+        )
+
+        # Apply daily bonus if it's today's question
+        if self.is_today:
+            total_points += daily_bonus_points
+
+        return total_points
 
 
 class AnswerManager(models.Manager):
@@ -64,7 +146,7 @@ class Answer(models.Model):
 
     question = models.ForeignKey(Question, related_name='answers', verbose_name='Pregunta', on_delete=models.CASCADE)
     author = models.ForeignKey(User, related_name='answers', verbose_name='Autor', on_delete=models.CASCADE)
-    value = models.PositiveIntegerField('Respuesta', default=0)
+    value = models.PositiveIntegerField('Respuesta', default=0, choices=ANSWERS_VALUES)
     comment = models.TextField('Comentario', default='', blank=True)
 
     objects = AnswerManager()

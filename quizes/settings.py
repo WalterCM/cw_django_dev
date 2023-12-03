@@ -127,3 +127,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
+
+# If it needs to be changed at runtime, consider it making it a Django model
+RANKING_CONFIGURATION = {
+    'answer_points': 10,
+    'like_points': 5,
+    'dislike_points': -3,
+    'daily_bonus_points': 10,
+}

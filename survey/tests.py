@@ -1,10 +1,14 @@
+from datetime import datetime, timedelta
+
 from django.test import TestCase
 from django.db.utils import IntegrityError
 from django.contrib.auth.models import User
+from django.conf import settings
+
 from survey.models import Question, Answer, Vote
 
 
-class ModelTests(TestCase):
+class BasicModelTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='test_user', password='12345')
         self.question = Question.objects.create(
@@ -107,3 +111,98 @@ class ModelTests(TestCase):
         del vote_data['is_like']
         with self.assertRaises(IntegrityError):
             Vote.objects.create(**vote_data)
+
+
+class RankingModelTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='test_user', password='12345')
+        self.today_question = Question.objects.create(
+            title='Today question',
+            author=self.user
+        )
+
+        self.non_today_question = Question.objects.create(
+            title='Yesterday question',
+            author=self.user
+        )
+        self.non_today_question.created = datetime.today().date() - timedelta(days=1)
+        self.non_today_question.save()
+
+        self.answer_points = settings.RANKING_CONFIGURATION.get('answer_points', 0)
+        self.like_points = settings.RANKING_CONFIGURATION.get('like_points', 0)
+        self.dislike_points = settings.RANKING_CONFIGURATION.get('dislike_points', 0)
+        self.daily_bonus_points = settings.RANKING_CONFIGURATION.get('daily_bonus_points', 0)
+
+    def test_points_for_answers(self):
+        """Tests that answers increases points by the amount in settings for answers"""
+        self.non_today_question.answers.create(author=self.user, value=1)
+        self.assertEqual(self.non_today_question.points, self.answer_points)
+        self.non_today_question.answers.create(author=self.user, value=2)
+        self.non_today_question.answers.create(author=self.user, value=3)
+        self.assertEqual(self.non_today_question.points, self.answer_points * 3)
+
+    def test_points_for_likes(self):
+        """Tests that likes increases points by the amount in settings for likes"""
+        self.non_today_question.votes.create(author=self.user, is_like=True)
+        self.assertEqual(self.non_today_question.points, self.like_points)
+        self.non_today_question.votes.create(author=self.user, is_like=True)
+        self.assertEqual(self.non_today_question.points, self.like_points * 2)
+
+    def test_points_for_dislikes(self):
+        """Tests that dislikes increases points by the amount in settings for dislikes"""
+        self.non_today_question.votes.create(author=self.user, is_like=False)
+        self.assertEqual(self.non_today_question.points, self.dislike_points)
+        self.non_today_question.votes.create(author=self.user, is_like=False)
+        self.assertEqual(self.non_today_question.points, self.dislike_points * 2)
+
+    def test_points_for_today_questions(self):
+        """Tests there is a bonus to questions that are created today"""
+        expected_points = self.daily_bonus_points
+        self.assertEqual(self.today_question.points, expected_points)
+        self.assertEqual(self.non_today_question.points, 0)
+
+    def test_points_mix(self):
+        """Tests different combinations of answers, likes, dislikes and the daily bonus"""
+        self.non_today_question.votes.create(author=self.user, is_like=True)
+        self.non_today_question.votes.create(author=self.user, is_like=False)
+        expected_points = self.like_points + self.dislike_points
+        self.assertEqual(self.non_today_question.points, expected_points)
+
+        self.non_today_question.answers.create(author=self.user, value=3)
+        self.non_today_question.votes.create(author=self.user, is_like=True)
+        expected_points += self.like_points + self.answer_points
+        self.assertEqual(self.non_today_question.points, expected_points)
+
+        self.today_question.answers.create(author=self.user, value=2)
+        self.today_question.votes.create(author=self.user, is_like=False)
+        expected_points = self.answer_points + self.dislike_points + self.daily_bonus_points
+        self.assertEqual(self.today_question.points, expected_points)
+
+        self.today_question.votes.create(author=self.user, is_like=True)
+        self.today_question.votes.create(author=self.user, is_like=True)
+        self.today_question.votes.create(author=self.user, is_like=True)
+        expected_points += self.like_points * 3
+        self.assertEqual(self.today_question.points, expected_points)
+
+    def test_ranked_queryset(self):
+        """Tests the ranked queryset of Questions"""
+
+        # Add a dislike to the yesterday questioun
+        self.non_today_question.votes.create(author=self.user, is_like=False)
+        # Create a few more questions to test ranking
+        for i in range(5):
+            Question.objects.create(title='Test question', author=self.user)
+
+        # Get the questions in a ranking
+        ranked_questions = Question.objects.ranked()
+
+        # First is today question because of the bonus
+        self.assertEqual(ranked_questions.first(), self.today_question)
+        # Last is yesterday question because it also has a dislike
+        self.assertEqual(ranked_questions.last(), self.non_today_question)
+
+        # Ensure the queryset is ordered by total_points in descending order
+        last_question_points = float('inf')
+        for question in ranked_questions:
+            self.assertLessEqual(question.points, last_question_points)
+            last_question_points = question.points

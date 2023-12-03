@@ -37,7 +37,7 @@ class Migration(migrations.Migration):
             name='Answer',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('value', models.PositiveIntegerField(default=0, verbose_name='Respuesta')),
+                ('value', models.PositiveIntegerField(choices=[(0, 'Sin Responder'), (1, 'Muy Bajo'), (2, 'Bajo'), (3, 'Regular'), (4, 'Alto'), (5, 'Muy Alto')], default=0, verbose_name='Respuesta')),
                 ('comment', models.TextField(blank=True, default='', verbose_name='Comentario')),
                 ('author', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='answers', to=settings.AUTH_USER_MODEL, verbose_name='Autor')),
                 ('question', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='answers', to='survey.question', verbose_name='Pregunta')),
