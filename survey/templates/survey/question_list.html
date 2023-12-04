@@ -22,7 +22,7 @@
                             {% for val in '12345' %}
                                 <a class="mx-1 answer {% if question.user_value|slugify == val %}fas{% else %}fal{% endif %} fa-star text-decoration-none"
                                    data-question="{{ question.pk }}"
-                                   data-value="{{ val }}" href="#"></a>
+                                   data-value="{{ val }}" href="/registration/login/"></a>
                             {% endfor %}
                         </div>
                     </div>
@@ -30,9 +30,9 @@
                         <u class="fw-lighter mb-1">Evalúa la pregunta</u>
                         <div>
                             <a class="mx-1 like {% if question.is_like is True %}fas{% else %}fal{% endif %} fa-thumbs-up text-decoration-none"
-                               href="#" data-question="{{ question.pk }}" data-value="like" ></a>
+                               href="/registration/login/" data-question="{{ question.pk }}" data-value="like" ></a>
                             <a class="mx-1 like {% if question.is_like is False %}fas{% else %}fal{% endif %} fa-thumbs-up fa-flip-both text-decoration-none"
-                               href="#" data-question="{{ question.pk }}" data-value="dislike"></a>
+                               href="/registration/login/" data-question="{{ question.pk }}" data-value="dislike"></a>
                         </div>
                     </div>
                     <div class="col-2">
@@ -69,6 +69,7 @@
 {% endblock %}
 
 {% block js %}
+    {% if user.is_authenticated %}
     <script>
         $('a.answer').click(function (event) {
             event.preventDefault();
@@ -118,5 +119,6 @@
             });
         });
     </script>
+    {% endif %}
 
 {% endblock %}
