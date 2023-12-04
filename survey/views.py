@@ -12,9 +12,10 @@ from survey.models import Question, Answer, Vote
 
 class QuestionListView(ListView):
     model = Question
+    paginate_by = 20
 
     def get_queryset(self):
-        queryset = super().get_queryset().ranked()[:20]
+        queryset = super().get_queryset().ranked()
 
         if self.request.user.is_authenticated:
             # Annotates user_value (answer value) and is_like (if user liked or disliked the question) to each question
