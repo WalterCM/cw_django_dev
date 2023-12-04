@@ -205,6 +205,22 @@ class RankingModelTests(TestCase):
             self.assertLessEqual(question.points, last_question_points)
             last_question_points = question.points
 
+    def test_distinct_ranked_queryset(self):
+        """Tests that the ranked queryset works with multiple answers and votes"""
+        for i in range(11):
+            user = User.objects.create_user(username='user{}'.format(i), password='55555')
+            Answer.objects.create(question=self.today_question, author=user, value=5)
+            Vote.objects.create(question=self.today_question, author=user, is_like=i % 2 == 0)
+
+        ranked_question = Question.objects.ranked().first()
+
+        # 11 answers (110 points)
+        # 6 likes (30 points)
+        # 5 dislikes (-15 points)
+        # today question (10 points)
+        total_points = 135  # points
+        self.assertEqual(total_points, ranked_question.total_points)
+
 
 class ViewTests(TestCase):
     def setUp(self):

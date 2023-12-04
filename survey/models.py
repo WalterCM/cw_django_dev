@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from django.db import models, IntegrityError
-from django.db.models import Sum, Case, When, Value, IntegerField
+from django.db.models import Count, Q, Case, When, Value, IntegerField
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.conf import settings
@@ -14,34 +14,29 @@ class QuestionQuerySet(models.QuerySet):
     def ranked(self):
         """
         Question queryset that orders the questions by points.
-        It uses Sum, Case and When instead of the points property because it was too slow. It was not good when scaled.
+        It uses Count, Case and When instead of the points property because it was too slow.
+        It was not good when scaled.
 
         Usage:
-        Questions.objects.ranked()
+        Question.objects.ranked()
         """
+        answer_points = settings.RANKING_CONFIGURATION.get('answer_points', 0)
+        like_points = settings.RANKING_CONFIGURATION.get('like_points', 0)
+        dislike_points = settings.RANKING_CONFIGURATION.get('dislike_points', 0)
+        daily_bonus_points = settings.RANKING_CONFIGURATION.get('daily_bonus_points', 0)
         return self.annotate(
-            total_points=Sum(
+            total_points=(
+                Count('answers', distinct=True) * answer_points +
+                Count('votes', filter=Q(votes__is_like=True), distinct=True) * like_points +
+                Count('votes', filter=Q(votes__is_like=False), distinct=True) * dislike_points +
                 Case(
-                    When(votes__is_like=True, then=Value(settings.RANKING_CONFIGURATION.get('like_points', 0))),
-                    When(votes__is_like=False, then=Value(settings.RANKING_CONFIGURATION.get('dislike_points', 0))),
+                    When(
+                        created=datetime.today().date(),
+                        then=Value(daily_bonus_points)
+                    ),
                     default=Value(0),
                     output_field=IntegerField()
                 )
-            ) +
-            Sum(
-                Case(
-                    When(answers__isnull=False, then=Value(settings.RANKING_CONFIGURATION.get('answer_points', 0))),
-                    default=Value(0),
-                    output_field=IntegerField()
-                )
-            ) +
-            Case(
-                When(
-                    created=datetime.today().date(),
-                    then=Value(settings.RANKING_CONFIGURATION.get('daily_bonus_points', 0))
-                ),
-                default=Value(0),
-                output_field=IntegerField()
             )
         ).order_by('-total_points')
 
